@@ -5,6 +5,7 @@ import sqlite3 from "sqlite3";
 import { open } from "sqlite";
 import authRoutes from "./routes.auth.js";
 import { authRequired } from "./auth.js";
+import reportsRoutes from "./routes.reports.js";
 
 dotenv.config();
 const app = express();
@@ -30,6 +31,8 @@ app.get("/api/ponds", async (req, res) => {
   const rows = county ? await db.all(sql, [county]) : await db.all(sql);
   res.json(rows);
 });
+
+app.use("/api/reports", reportsRoutes(dbPromise ));
 
 // detalii baltă
 app.get("/api/ponds/:id", async (req, res) => {

@@ -71,6 +71,34 @@ async function run() {
     FOREIGN KEY(user_id) REFERENCES users(id)
   );
 `);
+  await db.exec(`
+  CREATE TABLE IF NOT EXISTS reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    pond_id INTEGER NOT NULL,
+    user_id INTEGER NOT NULL,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    catch_species TEXT,
+    catch_weight REAL,
+    catch_count INTEGER,
+    photo_url TEXT,
+    status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(pond_id) REFERENCES ponds(id),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+`);
+const pondsCount = await db.get(`SELECT COUNT(*) as c FROM ponds`);
+if (pondsCount.c === 0) {
+  await db.exec(`
+    INSERT INTO ponds (name, location, price, rules, rating, lat, lng) VALUES
+    ('Balta Verde', 'Cluj', 70, 'Catch & Release', 4.5, 46.77, 23.59),
+    ('Lacul Albastru', 'Bihor', 50, 'Max 3 undițe', 4.1, 47.05, 22.34),
+    ('Lacul Căprioarelor', 'Cluj', 60, 'Fără reținere', 4.3, 46.80, 23.62);
+  `);
+}
+
+
 
 
   console.log("✅ DB ready. Users: admin@fishtrack.local/admin123, pescar@fishtrack.local/pescar123");

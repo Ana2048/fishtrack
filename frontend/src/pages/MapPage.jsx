@@ -12,7 +12,9 @@ export default function MapPage() {
     queryFn: () => getJSON("/api/ponds"),
   });
 
-  const ponds = data || [];
+  const ponds = useMemo(() => {
+    return data && Array.isArray(data) ? data : [];
+  }, [data]);
 
   // UI state
   const [q, setQ] = useState("");
@@ -36,8 +38,8 @@ export default function MapPage() {
         (p.rules || "").toLowerCase().includes(query);
 
       const matchCounty = county === "all" || p.location === county;
-      const matchPrice = (p.price ?? 0) <= Number(maxPrice);
-      const matchRating = (p.rating ?? 0) >= Number(minRating);
+      const matchPrice = (p.price ?? 0) <= parseInt(maxPrice, 10);
+      const matchRating = (p.rating ?? 0) >= parseFloat(minRating);
 
       return matchQ && matchCounty && matchPrice && matchRating;
     });
@@ -155,7 +157,7 @@ export default function MapPage() {
                 min="0"
                 max="200"
                 value={maxPrice}
-                onChange={(e) => setMaxPrice(e.target.value)}
+                onChange={(e) => setMaxPrice(parseInt(e.target.value, 10))}
               />
             </div>
 
@@ -167,7 +169,7 @@ export default function MapPage() {
                 max="5"
                 step="0.1"
                 value={minRating}
-                onChange={(e) => setMinRating(e.target.value)}
+                onChange={(e) => setMinRating(parseFloat(e.target.value))}
               />
             </div>
           </div>
