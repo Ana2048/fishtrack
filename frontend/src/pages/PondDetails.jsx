@@ -1,21 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import "./PondDetails.css";
+import { getAuth } from "../auth/authStore";
 
-function getAuth() {
-  try {
-    const raw = localStorage.getItem("ft_auth"); 
-    if (!raw) return null;
-
-    const parsed = JSON.parse(raw);
-    const user = parsed.user || parsed;
-
-    return { token: parsed.token, user };
-  } catch {
-    return null;
-  }
-}
-
+const BASE = "http://localhost:3000";
 
 export default function PondDetails() {
   const { id } = useParams();
@@ -24,31 +12,46 @@ export default function PondDetails() {
   const [pond, setPond] = useState(null);
   const [reports, setReports] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState("");
 
- const auth = getAuth();       // recitește la fiecare render
-const isLoggedIn = !!auth?.token;
-const role = auth?.user?.role;
+  // recitește auth la fiecare render (simplu)
+  const auth = getAuth();
+  const isLoggedIn = !!auth?.token;
+  const role = auth?.user?.role;
 
-const canAddReport =
-  isLoggedIn &&
-  ["fisher", "pescar", "user", "fisherman"].includes(
-    String(role || "").toLowerCase()
-  );
-
+  const canAddReport = useMemo(() => {
+    return (
+      isLoggedIn &&
+      ["fisher", "pescar", "user", "fisherman"].includes(String(role || "").toLowerCase())
+    );
+  }, [isLoggedIn, role]);
 
   useEffect(() => {
     let alive = true;
+    const ctrl = new AbortController();
 
     async function load() {
       setLoading(true);
+      setErr("");
+
       try {
-        const res = await fetch(`http://localhost:3000/api/ponds/${id}`);
-        if (!res.ok) throw new Error("Failed to load pond");
+        // timeout “hard”
+        const timeout = setTimeout(() => ctrl.abort(), 8000);
+
+        const res = await fetch(`${BASE}/api/ponds/${id}`, { signal: ctrl.signal });
+        clearTimeout(timeout);
+
+        if (!res.ok) {
+          const t = await res.text().catch(() => "");
+          throw new Error(`GET /api/ponds/${id} -> ${res.status} ${t}`);
+        }
+
         const data = await res.json();
 
+        // rapoarte (opțional)
         let rep = [];
         try {
-          const r = await fetch(`http://localhost:3000/api/reports?pondId=${id}`);
+          const r = await fetch(`${BASE}/api/reports?pondId=${id}`);
           if (r.ok) rep = await r.json();
         } catch {
           rep = [];
@@ -59,15 +62,18 @@ const canAddReport =
           setReports(rep);
         }
       } catch (e) {
-        console.error(e);
+        console.error("PondDetails load error:", e);
+        if (alive) setErr(String(e?.message || e));
       } finally {
         if (alive) setLoading(false);
       }
     }
 
     load();
+
     return () => {
       alive = false;
+      ctrl.abort();
     };
   }, [id]);
 
@@ -80,7 +86,6 @@ const canAddReport =
               ← Înapoi
             </button>
           </div>
-
           <div className="pdSkeleton">
             <div className="skTitle" />
             <div className="skLine" />
@@ -89,6 +94,33 @@ const canAddReport =
               <div className="skCard" />
               <div className="skCard" />
               <div className="skCard" />
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (err) {
+    return (
+      <div className="pdWrap">
+        <div className="pdShell">
+          <button className="pdBack" onClick={() => navigate(-1)}>
+            ← Înapoi
+          </button>
+
+          <div className="pdEmptyBox" style={{ marginTop: 14 }}>
+            <div className="pdEmptyTitle">Nu s-a putut încărca balta.</div>
+            <div className="pdEmptyText" style={{ whiteSpace: "pre-wrap" }}>
+              {err}
+            </div>
+            <div style={{ display: "flex", gap: 10, marginTop: 12 }}>
+              <button className="pdBtn primary" onClick={() => window.location.reload()}>
+                Reîncearcă
+              </button>
+              <Link className="pdBtn ghost" to="/map">
+                Înapoi la hartă
+              </Link>
             </div>
           </div>
         </div>
@@ -144,7 +176,6 @@ const canAddReport =
           </div>
         </div>
 
-        {/* HERO CARD */}
         <div className="pdHero">
           <div className="pdHeroLeft">
             <div className="pdTitleRow">
@@ -191,20 +222,16 @@ const canAddReport =
           </div>
         </div>
 
-        {/* REPORTS */}
         <div className="pdReports">
           <div className="pdSectionHead">
             <h2>Rapoarte ({reports.length})</h2>
-            <p>Rapoartele apar după aprobare (depinde de endpointul tău backend).</p>
+            <p>Rapoartele apar după aprobare.</p>
           </div>
 
           {reports.length === 0 ? (
             <div className="pdEmptyBox">
               <div className="pdEmptyTitle">Nu există rapoarte încă.</div>
-              <div className="pdEmptyText">
-                Fii primul care adaugă un raport pentru această baltă.
-              </div>
-
+              <div className="pdEmptyText">Fii primul care adaugă un raport pentru această baltă.</div>
               {canAddReport && (
                 <Link className="pdBtn primary" to={`/pond/${pond.id}/report`}>
                   + Adaugă raport
@@ -217,19 +244,15 @@ const canAddReport =
                 <div key={r.id} className="pdReportCard">
                   <div className="pdReportTop">
                     <div className="pdReportTitle">{r.title || "Raport"}</div>
-                    <span className={`pdStatus ${r.status || "pending"}`}>
-                      {r.status || "pending"}
-                    </span>
+                    <span className={`pdStatus ${r.status || "pending"}`}>{r.status || "pending"}</span>
                   </div>
 
-                  <div className="pdReportText">{r.description || r.notes || "—"}</div>
+                  <div className="pdReportText">{r.notes || "—"}</div>
 
                   <div className="pdReportMeta">
                     <span>🎣 {r.species || "—"}</span>
                     <span>⚖️ {r.weight ? `${r.weight} kg` : "—"}</span>
-                    <span>
-                      📅 {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}
-                    </span>
+                    <span>📅 {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
                   </div>
                 </div>
               ))}

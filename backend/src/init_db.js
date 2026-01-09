@@ -1,109 +1,127 @@
-import sqlite3 from "sqlite3";
-import { open } from "sqlite";
-import bcrypt from "bcryptjs";
+import { dbPromise } from "./db.js";
+import bcrypt from "bcrypt";
 
-const dbFile = "./database/fishtrack.db";
+const run = async () => {
+  const db = await dbPromise;
 
-async function run() {
-  const db = await open({ filename: dbFile, driver: sqlite3.Database });
-
-  // --- ponds ---
   await db.exec(`
+    PRAGMA foreign_keys = ON;
+
+    CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
+    role TEXT NOT NULL DEFAULT 'fisher',
+    created_at TEXT DEFAULT (datetime('now'))
+  );
+
     CREATE TABLE IF NOT EXISTS ponds (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       location TEXT NOT NULL,
       price REAL,
       rules TEXT,
-      rating REAL,
+      rating REAL DEFAULT 0,
       lat REAL,
-      lng REAL
+      lng REAL,
+      owner_user_id INTEGER,
+      FOREIGN KEY(owner_user_id) REFERENCES users(id)
     );
-    CREATE UNIQUE INDEX IF NOT EXISTS ux_ponds_name_loc ON ponds(name, location);
-  `);
 
-  // --- users ---
-  await db.exec(`
-    CREATE TABLE IF NOT EXISTS users (
+    CREATE TABLE IF NOT EXISTS pond_photos (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      email TEXT NOT NULL UNIQUE,
-      password TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin','fisher','pond_owner')) DEFAULT 'fisher'
-
+      pond_id INTEGER NOT NULL,
+      url TEXT NOT NULL,
+      caption TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE
     );
-    CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
+
+    CREATE TABLE IF NOT EXISTS pond_updates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pond_id INTEGER NOT NULL,
+      title TEXT NOT NULL,
+      body TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reviews (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pond_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
+      text TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pond_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      title TEXT,
+      species TEXT,
+      weight REAL,
+      notes TEXT,
+      status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected')),
+      created_at TEXT DEFAULT (datetime('now')),
+      FOREIGN KEY(pond_id) REFERENCES ponds(id) ON DELETE CASCADE,
+      FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+        CREATE TABLE IF NOT EXISTS pond_admin_requests (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      pond_name TEXT NOT NULL,
+      pond_location TEXT NOT NULL,
+      company_name TEXT,
+      company_cui TEXT,
+      company_address TEXT,
+      phone TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY(user_id) REFERENCES users(id)
+    );
   `);
 
-  // --- seed admin + fisher (idempotent) ---
-  const adminHash = await bcrypt.hash("admin123", 10);
-  await db.run(
-    `INSERT OR IGNORE INTO users(name,email,password,role) VALUES (?,?,?,?)`,
-    ["Admin", "admin@fishtrack.local", adminHash, "admin"]
-  );
+  // seed users dacă nu există
+  const u = await db.get(`SELECT COUNT(*) as c FROM users`);
+  if (u.c === 0) {
+    const adminPass = await bcrypt.hash("admin123", 10);
+    const fisherPass = await bcrypt.hash("pescar123", 10);
+    const pondAdminPass = await bcrypt.hash("pond123", 10);
 
-  const fisherHash = await bcrypt.hash("pescar123", 10);
-  await db.run(
-    `INSERT OR IGNORE INTO users(name,email,password,role) VALUES (?,?,?,?)`,
-    ["Pescar Demo", "pescar@fishtrack.local", fisherHash, "fisher"]
-  );
+    await db.run(
+      `INSERT INTO users(name,email,password_hash,role) VALUES (?,?,?,?)`,
+      ["Admin Demo", "admin@fishtrack.local", adminPass, "admin"]
+    );
+    await db.run(
+      `INSERT INTO users(name,email,password_hash,role) VALUES (?,?,?,?)`,
+      ["Pescar Demo", "pescar@fishtrack.local", fisherPass, "fisher"]
+    );
+    await db.run(
+      `INSERT INTO users(name,email,password_hash,role) VALUES (?,?,?,?)`,
+      ["Pond Admin Demo", "pond@fishtrack.local", pondAdminPass, "pond_admin"]
+    );
+  }
 
-  // --- seed ponds (idempotent) ---
-  await db.exec(`
-    INSERT OR IGNORE INTO ponds (name, location, price, rules, rating, lat, lng) VALUES
-    ('Balta Verde', 'Cluj', 70, 'Catch & Release', 4.5, 46.77, 23.59),
-    ('Lacul Albastru', 'Bihor', 50, 'Max 3 undițe', 4.1, 47.05, 22.34),
-    ('Lacul Căprioarelor', 'Cluj', 60, 'Catch & Release', 4.3, 46.58, 23.78);
-  `);
+  // seed ponds dacă nu există
+  const p = await db.get(`SELECT COUNT(*) as c FROM ponds`);
+  if (p.c === 0) {
+    await db.run(
+      `INSERT INTO ponds (name, location, price, rules, rating, lat, lng) VALUES (?,?,?,?,?,?,?)`,
+      ["Balta Verde", "Cluj", 70, "Catch & Release", 4.5, 46.77, 23.59]
+    );
+    await db.run(
+      `INSERT INTO ponds (name, location, price, rules, rating, lat, lng) VALUES (?,?,?,?,?,?,?)`,
+      ["Lacul Albastru", "Bihor", 50, "Max 3 undițe", 4.1, 47.05, 22.34]
+    );
+  }
 
-  await db.exec(`
-  CREATE TABLE IF NOT EXISTS owner_requests (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user_id INTEGER NOT NULL,
-    pond_name TEXT NOT NULL,
-    pond_location TEXT NOT NULL,
-    company_name TEXT NOT NULL,
-    company_cui TEXT NOT NULL,
-    company_address TEXT NOT NULL,
-    phone TEXT,
-    status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
-  await db.exec(`
-  CREATE TABLE IF NOT EXISTS reports (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    pond_id INTEGER NOT NULL,
-    user_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    description TEXT NOT NULL,
-    catch_species TEXT,
-    catch_weight REAL,
-    catch_count INTEGER,
-    photo_url TEXT,
-    status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
-    created_at TEXT DEFAULT (datetime('now')),
-    FOREIGN KEY(pond_id) REFERENCES ponds(id),
-    FOREIGN KEY(user_id) REFERENCES users(id)
-  );
-`);
-const pondsCount = await db.get(`SELECT COUNT(*) as c FROM ponds`);
-if (pondsCount.c === 0) {
-  await db.exec(`
-    INSERT INTO ponds (name, location, price, rules, rating, lat, lng) VALUES
-    ('Balta Verde', 'Cluj', 70, 'Catch & Release', 4.5, 46.77, 23.59),
-    ('Lacul Albastru', 'Bihor', 50, 'Max 3 undițe', 4.1, 47.05, 22.34),
-    ('Lacul Căprioarelor', 'Cluj', 60, 'Fără reținere', 4.3, 46.80, 23.62);
-  `);
-}
-
-
-
-
-  console.log("✅ DB ready. Users: admin@fishtrack.local/admin123, pescar@fishtrack.local/pescar123");
-  await db.close();
-}
+  console.log("✅ DB inițializată (fără duplicate).");
+};
 
 run().catch((e) => {
   console.error(e);

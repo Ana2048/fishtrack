@@ -1,24 +1,34 @@
 import jwt from "jsonwebtoken";
 
-export function requireAuth(req, res, next) {
-  const hdr = req.headers.authorization || "";
-  const token = hdr.startsWith("Bearer ") ? hdr.slice(7) : null;
-  if (!token) return res.status(401).json({ error: "Missing token" });
+const JWT_SECRET = process.env.JWT_SECRET || "dev_secret";
+export const requireAuth = authRequired;
+
+
+// Middleware: cere token valid și pune userul în req.user
+export function authRequired(req, res, next) {
+  const header = req.headers.authorization || "";
+  const [type, token] = header.split(" ");
+
+  if (type !== "Bearer" || !token) {
+    return res.status(401).json({ error: "Missing token" });
+  }
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || "dev_secret");
+    const payload = jwt.verify(token, JWT_SECRET);
     req.user = payload; // {id,email,role,name}
     next();
-  } catch {
+  } catch (e) {
     return res.status(401).json({ error: "Invalid token" });
   }
 }
 
+// Middleware: cere un rol anume
 export function requireRole(...roles) {
   return (req, res, next) => {
-    if (!req.user) return res.status(401).json({ error: "Unauthorized" });
-    if (!roles.includes(req.user.role))
-      return res.status(403).json({ error: "Forbidden" });
+    const role = String(req.user?.role || "").toLowerCase();
+    const ok = roles.map(r => String(r).toLowerCase()).includes(role);
+    if (!ok) return res.status(403).json({ error: "Forbidden" });
     next();
   };
 }
+

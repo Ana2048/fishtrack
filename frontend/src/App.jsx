@@ -8,6 +8,8 @@ import PondDetails from "./pages/PondDetails.jsx";
 import SubmitReport from "./pages/SubmitReport.jsx";
 import AdminModeration from "./pages/AdminModeration.jsx";
 import ProtectedRoute from "./components/ProtectedRoute.jsx";
+import PondAdminPage from "./pages/PondAdminPage.jsx";
+import AdminPage from "./pages/AdminPage.jsx";
 
 export default function App() {
   return (
@@ -29,6 +31,8 @@ export default function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/pond-admin" element={<PondAdminPage />} />
+        <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </div>
   );
