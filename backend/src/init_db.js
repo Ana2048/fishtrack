@@ -29,7 +29,8 @@ async function run() {
       name TEXT NOT NULL,
       email TEXT NOT NULL UNIQUE,
       password TEXT NOT NULL,
-      role TEXT NOT NULL CHECK(role IN ('admin','fisher')) DEFAULT 'fisher'
+      role TEXT NOT NULL CHECK(role IN ('admin','fisher','pond_owner')) DEFAULT 'fisher'
+
     );
     CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
   `);
@@ -54,6 +55,23 @@ async function run() {
     ('Lacul Albastru', 'Bihor', 50, 'Max 3 undițe', 4.1, 47.05, 22.34),
     ('Lacul Căprioarelor', 'Cluj', 60, 'Catch & Release', 4.3, 46.58, 23.78);
   `);
+
+  await db.exec(`
+  CREATE TABLE IF NOT EXISTS owner_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    pond_name TEXT NOT NULL,
+    pond_location TEXT NOT NULL,
+    company_name TEXT NOT NULL,
+    company_cui TEXT NOT NULL,
+    company_address TEXT NOT NULL,
+    phone TEXT,
+    status TEXT NOT NULL CHECK(status IN ('pending','approved','rejected')) DEFAULT 'pending',
+    created_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY(user_id) REFERENCES users(id)
+  );
+`);
+
 
   console.log("✅ DB ready. Users: admin@fishtrack.local/admin123, pescar@fishtrack.local/pescar123");
   await db.close();
