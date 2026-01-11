@@ -7,11 +7,11 @@ import "./LandingPage.css";
 import heroImg from "../assets/hero-ana.jpg";
 import featureMap from "../assets/feature-map1.jpg";
 import featureReport from "../assets/feature-report.jpg";
-//import featureAdmin from "../assets/feature-admin.jpg";
+import featureAdmin from "../assets/feature-admin.jpg";
 //const heroImg = "/images/hero.jpg";
 //const featureMap = "/images/feature-map.jpg";
 //const featureReport = "/images/feature-report.jpg";
-const featureAdmin = "/images/feature-admin.jpg";
+//const featureAdmin = "/images/feature-admin.jpg";
 
 
 const fadeUp = {

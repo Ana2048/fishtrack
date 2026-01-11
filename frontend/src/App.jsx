@@ -31,7 +31,15 @@ export default function App() {
         } />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/pond-admin" element={<PondAdminPage />} />
+        <Route
+  path="/pond-admin"
+  element={
+    <ProtectedRoute role={["pond_admin"]}>
+      <PondAdminPage />
+    </ProtectedRoute>
+  }
+/>
+
         <Route path="/admin" element={<AdminPage />} />
       </Routes>
     </div>
