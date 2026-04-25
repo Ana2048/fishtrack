@@ -90,7 +90,7 @@ Below are some example views of the application:
 * 🗺️ **Main Map View** – interactive map with fishing locations
  <img width="1488" height="907" alt="image" src="https://github.com/user-attachments/assets/20212f48-93f0-4e47-924a-4a37a84d7150" />
 
-
+---
  
 
 * 📄 **Pond Details Page** – rules, pricing, updates, and ratings
